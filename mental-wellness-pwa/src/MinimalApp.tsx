@@ -122,51 +122,32 @@ const MinimalApp: React.FC = () => {
 
   const handleMoodSelect = async (mood: number) => {
     setCurrentMood(mood);
-    
-    // Check for crisis keywords in note
-    if (moodNote) {
-      const crisisCheck = detectCrisisKeywords(moodNote);
-      if (crisisCheck.detected && crisisCheck.severity === 'critical') {
-        alert('⚠️ Crisis Support: If you\'re having thoughts of self-harm, please reach out:\n\n🇺🇸 National Suicide Prevention Lifeline: 988\n🇮🇳 AASRA: +91-22-27546669\n\nYou are not alone. Help is available.');
+    try {
+      const response = await fetch('/api/mood', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          mood,
+          notes: moodNote,
+          activities: selectedTags
+        })
+      });
+      const data = await response.json();
+      if (data.success && data.mood) {
+        // Fetch updated mood history from API
+        const moodsRes = await fetch('/api/mood');
+        const moodsData = await moodsRes.json();
+        setMoodHistory(moodsData.moods || []);
+        // Update baseline
+        const scores = (moodsData.moods || []).map((entry: any) => entry.mood);
+        if (scores.length > 0) {
+          const baselineData = calculateBaseline(scores);
+          setBaseline(baselineData);
+        }
       }
+    } catch (error) {
+      alert('Failed to save mood. Please try again.');
     }
-    
-    const newEntry: MoodEntry = {
-      mood,
-      timestamp: new Date().toISOString(),
-      note: moodNote,
-      tags: selectedTags
-    };
-    
-    const updatedHistory = [newEntry, ...moodHistory.slice(0, 19)]; // Keep last 20
-    setMoodHistory(updatedHistory);
-    localStorage.setItem('moodHistory', JSON.stringify(updatedHistory));
-    
-    // Update baseline
-    const scores = updatedHistory.map(entry => entry.mood);
-    const baselineData = calculateBaseline(scores);
-    setBaseline(baselineData);
-    
-    // Suggest intervention if needed
-    if (baselineData.changePointDetected || baselineData.zScore < -1.0) {
-      const recentInterventions = JSON.parse(localStorage.getItem('recentInterventions') || '[]');
-      const recommendation = selectMicroIntervention(baselineData, recentInterventions);
-      
-      if (recommendation.priority === 'high' || recommendation.priority === 'urgent') {
-        setTimeout(() => {
-          const userWantsIntervention = window.confirm(`💡 Suggestion: ${recommendation.reason}\n\nWould you like to try a ${recommendation.estimatedDuration}-minute intervention?`);
-          if (userWantsIntervention) {
-            const intervention = interventions.find(i => i.id === recommendation.interventionId);
-            if (intervention) {
-              setCurrentIntervention(intervention);
-              setCurrentView('interventions');
-            }
-          }
-        }, 1000);
-      }
-    }
-    
-    // Clear form
     setMoodNote('');
     setSelectedTags([]);
   };
@@ -185,103 +166,29 @@ const MinimalApp: React.FC = () => {
 
   const handleChatSend = async () => {
     if (!chatInput.trim() || chatLoading) return;
-    
     const userMessage = { text: chatInput, sender: 'user' as const, timestamp: new Date() };
     setChatMessages(prev => [...prev, userMessage]);
     setChatLoading(true);
-    
     const currentInput = chatInput;
     setChatInput('');
-    
     try {
-      let aiResponse: AIResponse;
-      
-      // Simple local AI responses for now (working implementation)
-      const responses = [
-        "I hear you, and I want you to know that your feelings are valid. What's been weighing on your mind lately?",
-        "It sounds like you're going through a challenging time. Can you tell me more about what's happening?",
-        "Thank you for sharing that with me. How are you taking care of yourself during this difficult period?",
-        "I'm here to listen. What kind of support would be most helpful for you right now?",
-        "That sounds really tough. Have you been able to talk to anyone else about how you're feeling?",
-        "I appreciate you opening up. What usually helps you feel a bit better when things get overwhelming?",
-        "It takes courage to reach out. What's one small thing that might bring you some comfort today?"
-      ];
-
-      // Crisis detection
-      const crisisKeywords = ['suicide', 'kill myself', 'end it all', 'want to die', 'hopeless', 'worthless', 'can\'t go on'];
-      const crisisDetected = crisisKeywords.some(keyword => 
-        currentInput.toLowerCase().includes(keyword)
-      );
-
-      if (crisisDetected) {
-        aiResponse = {
-          message: "I'm very concerned about what you've shared. Please reach out to a crisis helpline immediately:\n\n🇺🇸 US: 988 (Suicide & Crisis Lifeline)\n🇮🇳 India: +91-22-27546669 (AASRA)\n🚨 Emergency: 911 (US) or 112 (India)\n\nYou don't have to go through this alone. Help is available right now.",
-          confidence: 0.95,
-          crisisDetected: true,
-          suggestedActions: [
-            'Call crisis helpline immediately: 988 (US) or +91-22-27546669 (India)',
-            'Go to nearest emergency room if in immediate danger',
-            'Contact a trusted friend, family member, or counselor',
-            'Consider calling emergency services: 911 (US) or 112 (India)'
-          ]
-        };
-        
-        // Show immediate crisis alert
-        setTimeout(() => {
-          alert('🚨 CRISIS SUPPORT NEEDED\n\nImmediate help is available:\n• US: 988 (Suicide & Crisis Lifeline)\n• India: +91-22-27546669 (AASRA)\n• Emergency: 911 (US) or 112 (India)\n\nYou are not alone. Please reach out now.');
-        }, 500);
-      } else {
-        // Use AI service if configured, otherwise use local responses
-        if (aiProvider === 'openai' && isAiConfigured) {
-          try {
-            aiResponse = await aiService.chat(currentInput);
-          } catch (error) {
-            console.log('OpenAI failed, using local response:', error);
-            aiResponse = {
-              message: responses[Math.floor(Math.random() * responses.length)],
-              confidence: 0.7,
-              crisisDetected: false
-            };
-          }
-        } else {
-          // Local response
-          aiResponse = {
-            message: responses[Math.floor(Math.random() * responses.length)],
-            confidence: 0.8,
-            crisisDetected: false
-          };
-        }
-      }
-      
-      const botMessage = { 
-        text: aiResponse.message, 
-        sender: 'bot' as const, 
+      const response = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: currentInput })
+      });
+      const data = await response.json();
+      const botMessage = {
+        text: data.text || 'Sorry, I am having trouble responding right now.',
+        sender: 'bot' as const,
         timestamp: new Date(),
-        confidence: aiResponse.confidence
+        confidence: 0.9
       };
-      
       setChatMessages(prev => [...prev, botMessage]);
-      
-      // Suggest interventions if appropriate
-      if (aiResponse.suggestedActions && aiResponse.suggestedActions.length > 0) {
-        setTimeout(() => {
-          const actionMessage = {
-            text: `💡 Suggested actions:\n${aiResponse.suggestedActions!.map(action => `• ${action}`).join('\n')}`,
-            sender: 'bot' as const,
-            timestamp: new Date(),
-            confidence: 0.9
-          };
-          setChatMessages(prev => [...prev, actionMessage]);
-        }, 1500);
-      }
-      
     } catch (error) {
-      console.error('Chat error:', error);
-      
-      // Fallback response
-      const fallbackMessage = { 
-        text: "I'm here to listen and support you. How are you feeling right now? If this is urgent, please consider reaching out to a crisis helpline: 988 (US) or +91-22-27546669 (India).", 
-        sender: 'bot' as const, 
+      const fallbackMessage = {
+        text: "I'm here to listen and support you. If this is urgent, please consider reaching out to a crisis helpline: 988 (US) or +91-22-27546669 (India).",
+        sender: 'bot' as const,
         timestamp: new Date(),
         confidence: 0.6
       };

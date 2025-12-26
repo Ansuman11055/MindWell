@@ -1,4 +1,4 @@
-# Nallas_hack
+# Mental_wellness_PWA
 
 ## Description
 Provide a brief, yet comprehensive overview of your project here. Explain the problem it solves, its purpose, and its primary features. Think about what a visitor to your repository needs to know first.
