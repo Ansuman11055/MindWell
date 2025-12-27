@@ -1,8 +1,21 @@
-import React, { useState, useEffect } from 'react';
+// Step-by-step Daily Check-In Flow Component
+import React, { useState, useEffect, Suspense } from 'react';
 import { dbService } from './utils/database';
 import { deriveKeyFromPassword, generateSalt } from './utils/encryption';
 import { calculateBaseline, selectMicroIntervention, detectCrisisKeywords } from './utils/algorithms';
 import { aiService, configureAI, AIResponse } from './utils/aiService';
+
+// Lazy load large feature components from their modularized locations
+const Dashboard = React.lazy(() => import('./components/Dashboard/Dashboard'));
+const CheckInFlow = React.lazy(() => import('./components/CheckInFlow'));
+const Journal = React.lazy(() => import('./components/Journal'));
+const MindfulnessTools = React.lazy(() => import('./components/MindfulnessTools'));
+const Resources = React.lazy(() => import('./components/Resources'));
+const Safety = React.lazy(() => import('./components/Safety'));
+const VRExperience = React.lazy(() => import('./components/VRExperience'));
+const PrivacySettings = React.lazy(() => import('./components/PrivacySettings'));
+
+// ...existing code...
 
 interface MoodEntry {
   mood: number;
@@ -20,10 +33,345 @@ interface InterventionModule {
 }
 
 const MinimalApp: React.FC = () => {
+  // PWA enhancements: offline detection and install prompt
+  const [isOffline, setIsOffline] = useState(!navigator.onLine);
+  const [showOfflineBanner, setShowOfflineBanner] = useState(false);
+  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+
+  useEffect(() => {
+    const handleOnline = () => {
+      setIsOffline(false);
+      setShowOfflineBanner(false);
+    };
+    const handleOffline = () => {
+      setIsOffline(true);
+      setShowOfflineBanner(true);
+    };
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    if (!navigator.onLine) setShowOfflineBanner(true);
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
+
+  useEffect(() => {
+    const handler = (e: any) => {
+      e.preventDefault();
+      setDeferredPrompt(e);
+      setIsInstallable(true);
+    };
+    window.addEventListener('beforeinstallprompt', handler);
+    return () => window.removeEventListener('beforeinstallprompt', handler);
+  }, []);
   const [currentMood, setCurrentMood] = useState<number | null>(null);
   const [moodHistory, setMoodHistory] = useState<MoodEntry[]>([]);
   const [isInstallable, setIsInstallable] = useState(false);
-  const [currentView, setCurrentView] = useState<'mood' | 'dashboard' | 'interventions' | 'vr' | 'chat' | 'privacy'>('mood');
+  const [currentView, setCurrentView] = useState<
+    'dashboard' | 'checkin' | 'mood' | 'habits' | 'journal' | 'mindfulness' | 'progress' | 'resources' | 'safety' | 'interventions' | 'vr' | 'chat' | 'privacy'
+  >('mood');
+
+  // Safety and support features
+  const panicHotline = '988';
+  const [showPanic, setShowPanic] = useState(false);
+  const handlePanic = () => {
+    setShowPanic(true);
+    setTimeout(() => setShowPanic(false), 8000);
+    window.open('tel:' + panicHotline, '_blank');
+  };
+
+  // Safety component
+  const Safety = () => (
+    <section style={styles.section}>
+      <h2 style={styles.sectionTitle}>🛟 Safety & Support</h2>
+      <button onClick={handlePanic} style={{...styles.btn, background: '#e74c3c', fontWeight: 700, fontSize: '1.2rem', marginBottom: 24}}>🚨 Panic Button: Call 988</button>
+      {showPanic && (
+        <div style={{background: '#fff3cd', color: '#856404', border: '1px solid #ffc107', borderRadius: 10, padding: '1rem', marginBottom: 24, textAlign: 'center'}}>
+          <strong>Help is on the way. Stay calm and breathe.</strong>
+        </div>
+      )}
+      <h3>Emergency Contacts</h3>
+      <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+        <li style={{ marginBottom: 16 }}>
+          <strong>988 Suicide & Crisis Lifeline (US):</strong> <a href="tel:988" style={{ color: '#3498db' }}>988</a>
+        </li>
+        <li style={{ marginBottom: 16 }}>
+          <strong>National Domestic Violence Hotline:</strong> <a href="tel:1-800-799-7233" style={{ color: '#3498db' }}>1-800-799-7233</a>
+        </li>
+        <li style={{ marginBottom: 16 }}>
+          <strong>Text HOME to 741741 (Crisis Text Line)</strong>
+        </li>
+        <li style={{ marginBottom: 16 }}>
+          <strong>International Hotlines:</strong> <a href="https://www.opencounseling.com/suicide-hotlines" target="_blank" rel="noopener noreferrer" style={{ color: '#3498db' }}>Find your country</a>
+        </li>
+      </ul>
+      <div style={{ marginTop: '2rem', color: '#888', fontSize: '0.95rem', textAlign: 'center' }}>
+        <span>If you are in immediate danger, please call emergency services or use the panic button above.</span>
+      </div>
+    </section>
+  );
+
+  // Resources data
+  const resources = [
+    {
+      name: '988 Suicide & Crisis Lifeline (US)',
+      desc: '24/7 free and confidential support for people in distress.',
+      phone: '988',
+      url: 'https://988lifeline.org/'
+    },
+    {
+      name: 'SAMHSA National Helpline (US)',
+      desc: 'Substance Abuse and Mental Health Services Administration.',
+      phone: '1-800-662-HELP',
+      url: 'https://www.samhsa.gov/find-help/national-helpline'
+    },
+    {
+      name: 'National Alliance on Mental Illness (NAMI)',
+      desc: 'Education, support, and advocacy for mental health.',
+      url: 'https://nami.org/Home'
+    },
+    {
+      name: 'Crisis Text Line',
+      desc: 'Text HOME to 741741 for free, 24/7 crisis counseling.',
+      url: 'https://www.crisistextline.org/'
+    },
+    {
+      name: 'International Helplines',
+      desc: 'Find mental health hotlines by country.',
+      url: 'https://www.opencounseling.com/suicide-hotlines'
+    }
+  ];
+
+  // Resources component
+  const Resources = () => (
+    <section style={styles.section}>
+      <h2 style={styles.sectionTitle}>📚 Mental Health Resources</h2>
+      <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+        {resources.map((r, i) => (
+          <li key={i} style={{ marginBottom: 24, background: '#f8f9fa', borderRadius: 10, padding: '1.2rem' }}>
+            <div style={{ fontWeight: 600, color: '#2c3e50', marginBottom: 6 }}>{r.name}</div>
+            <div style={{ color: '#666', marginBottom: 8 }}>{r.desc}</div>
+            {r.phone && <div style={{ marginBottom: 6 }}><strong>Phone:</strong> <a href={`tel:${r.phone}`} style={{ color: '#3498db' }}>{r.phone}</a></div>}
+            <a href={r.url} target="_blank" rel="noopener noreferrer" style={{ color: '#3498db', textDecoration: 'underline' }}>Learn more</a>
+          </li>
+        ))}
+      </ul>
+      <div style={{ marginTop: '2rem', color: '#888', fontSize: '0.95rem', textAlign: 'center' }}>
+        <span>If you or someone you know is in crisis, please reach out to a professional or use one of the resources above.</span>
+      </div>
+    </section>
+  );
+
+  // Mindfulness tools state
+  const mindfulnessTools = [
+    {
+      id: 'breathing',
+      name: '4-7-8 Breathing',
+      desc: 'Calming breathing technique to reduce anxiety and stress.',
+      steps: [
+        'Inhale quietly through your nose for 4 seconds.',
+        'Hold your breath for 7 seconds.',
+        'Exhale completely through your mouth for 8 seconds.',
+        'Repeat for 3-4 cycles.'
+      ]
+    },
+    {
+      id: 'grounding',
+      name: '5-4-3-2-1 Grounding',
+      desc: 'Ground yourself in the present moment using your senses.',
+      steps: [
+        'Name 5 things you can see.',
+        'Name 4 things you can touch.',
+        'Name 3 things you can hear.',
+        'Name 2 things you can smell.',
+        'Name 1 thing you can taste.'
+      ]
+    },
+    {
+      id: 'meditation',
+      name: '2-Minute Mindful Meditation',
+      desc: 'A short guided meditation to help you reset.',
+      steps: [
+        'Sit comfortably and close your eyes.',
+        'Focus on your breath, noticing each inhale and exhale.',
+        'If your mind wanders, gently bring your attention back to your breath.',
+        'Continue for 2 minutes.'
+      ]
+    }
+  ];
+  const [selectedTool, setSelectedTool] = useState<string | null>(null);
+
+  // MindfulnessTools component
+  const MindfulnessTools = () => (
+    <section style={styles.section}>
+      <h2 style={styles.sectionTitle}>🧘 Mindfulness Tools</h2>
+      {selectedTool ? (
+        <div style={{maxWidth: 500, margin: '0 auto'}}>
+          <button onClick={() => setSelectedTool(null)} style={{...styles.btn, marginBottom: 16}}>&larr; Back</button>
+          <h3 style={{marginBottom: 8}}>{mindfulnessTools.find(t => t.id === selectedTool)?.name}</h3>
+          <p style={{color: '#666', marginBottom: 16}}>{mindfulnessTools.find(t => t.id === selectedTool)?.desc}</p>
+          <ol style={{marginLeft: 20}}>
+            {mindfulnessTools.find(t => t.id === selectedTool)?.steps.map((step, i) => (
+              <li key={i} style={{marginBottom: 8}}>{step}</li>
+            ))}
+          </ol>
+        </div>
+      ) : (
+        <div style={{display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '1.5rem'}}>
+          {mindfulnessTools.map(tool => (
+            <div key={tool.id} style={{background: '#f8f9fa', borderRadius: 12, padding: '1.5rem', boxShadow: '0 2px 8px rgba(0,0,0,0.04)'}}>
+              <h3 style={{marginBottom: 8}}>{tool.name}</h3>
+              <p style={{color: '#666', marginBottom: 16}}>{tool.desc}</p>
+              <button onClick={() => setSelectedTool(tool.id)} style={styles.btn}>Try</button>
+            </div>
+          ))}
+        </div>
+      )}
+    </section>
+  );
+
+  // Journaling state
+  const [journalEntries, setJournalEntries] = useState<{date: string, text: string}[]>([]);
+  const [journalText, setJournalText] = useState('');
+
+  // Load journal from localStorage
+  useEffect(() => {
+    const saved = localStorage.getItem('journalEntries');
+    if (saved) setJournalEntries(JSON.parse(saved));
+  }, []);
+  useEffect(() => {
+    localStorage.setItem('journalEntries', JSON.stringify(journalEntries));
+  }, [journalEntries]);
+
+  const todayJournal = journalEntries.find(e => e.date === new Date().toISOString().slice(0,10));
+  const handleSaveJournal = () => {
+    const today = new Date().toISOString().slice(0,10);
+    if (journalText.trim()) {
+      setJournalEntries(prev => {
+        const filtered = prev.filter(e => e.date !== today);
+        return [{date: today, text: journalText.trim()}, ...filtered];
+      });
+      setJournalText('');
+    }
+  };
+
+  // Journal component
+  const Journal = () => (
+    <section style={styles.section}>
+      <h2 style={styles.sectionTitle}>📓 Daily Journal</h2>
+      <div style={{ marginBottom: '1.5rem' }}>
+        <textarea
+          value={journalText}
+          onChange={e => setJournalText(e.target.value)}
+          placeholder="Write your thoughts, feelings, or anything on your mind..."
+          style={{ ...styles.textarea, minHeight: 120, marginBottom: 12 }}
+        />
+        <button onClick={handleSaveJournal} style={styles.btn} disabled={!journalText.trim()}>Save Entry</button>
+      </div>
+      <h3 style={{marginTop: '2rem'}}>Previous Entries</h3>
+      {journalEntries.length === 0 ? (
+        <p style={{ color: '#888', textAlign: 'center' }}>No journal entries yet. Start writing above!</p>
+      ) : (
+        <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+          {journalEntries.map(entry => (
+            <li key={entry.date} style={{ marginBottom: 18, background: '#f8f9fa', borderRadius: 10, padding: '1rem' }}>
+              <div style={{ fontWeight: 600, color: '#2c3e50', marginBottom: 6 }}>{new Date(entry.date).toLocaleDateString()}</div>
+              <div style={{ whiteSpace: 'pre-line', color: '#333' }}>{entry.text}</div>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+
+  // Habit tracking state
+  const [habits, setHabits] = useState<string[]>([]);
+  const [habitInput, setHabitInput] = useState('');
+  const [habitChecks, setHabitChecks] = useState<{ [date: string]: string[] }>({});
+
+  // Load habits from localStorage
+  useEffect(() => {
+    const saved = localStorage.getItem('habits');
+    if (saved) setHabits(JSON.parse(saved));
+    const checks = localStorage.getItem('habitChecks');
+    if (checks) setHabitChecks(JSON.parse(checks));
+  }, []);
+
+  // Save habits/checks to localStorage
+  useEffect(() => {
+    localStorage.setItem('habits', JSON.stringify(habits));
+  }, [habits]);
+  useEffect(() => {
+    localStorage.setItem('habitChecks', JSON.stringify(habitChecks));
+  }, [habitChecks]);
+
+  const today = new Date().toISOString().slice(0, 10);
+  const handleAddHabit = () => {
+    if (habitInput.trim() && !habits.includes(habitInput.trim())) {
+      setHabits([...habits, habitInput.trim()]);
+      setHabitInput('');
+    }
+  };
+  const handleRemoveHabit = (habit: string) => {
+    setHabits(habits.filter(h => h !== habit));
+    // Remove from checks
+    const updated = { ...habitChecks };
+    Object.keys(updated).forEach(date => {
+      updated[date] = updated[date].filter(h => h !== habit);
+    });
+    setHabitChecks(updated);
+  };
+  const handleToggleHabit = (habit: string) => {
+    setHabitChecks(prev => {
+      const checked = prev[today] || [];
+      return {
+        ...prev,
+        [today]: checked.includes(habit)
+          ? checked.filter(h => h !== habit)
+          : [...checked, habit]
+      };
+    });
+  };
+
+  // HabitTracker component
+  const HabitTracker = () => (
+    <section style={styles.section}>
+      <h2 style={styles.sectionTitle}>🗓️ Daily Habits</h2>
+      <div style={{ marginBottom: '1.5rem' }}>
+        <input
+          type="text"
+          value={habitInput}
+          onChange={e => setHabitInput(e.target.value)}
+          placeholder="Add a new habit (e.g., Meditate, Walk, Read)"
+          style={{ ...styles.input, maxWidth: 320, display: 'inline-block', marginRight: 8 }}
+        />
+        <button onClick={handleAddHabit} style={styles.btn} disabled={!habitInput.trim()}>Add</button>
+      </div>
+      {habits.length === 0 ? (
+        <p style={{ color: '#888', textAlign: 'center' }}>No habits yet. Add your first habit above!</p>
+      ) : (
+        <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+          {habits.map(habit => (
+            <li key={habit} style={{ display: 'flex', alignItems: 'center', marginBottom: 12 }}>
+              <input
+                type="checkbox"
+                checked={(habitChecks[today] || []).includes(habit)}
+                onChange={() => handleToggleHabit(habit)}
+                style={{ marginRight: 12, width: 20, height: 20 }}
+                aria-label={`Mark ${habit} as done today`}
+              />
+              <span style={{ flex: 1, fontSize: '1.1rem' }}>{habit}</span>
+              <button onClick={() => handleRemoveHabit(habit)} style={{ ...styles.btn, background: '#e74c3c', padding: '0.3rem 0.8rem', fontSize: '0.9rem' }}>Remove</button>
+            </li>
+          ))}
+        </ul>
+      )}
+      <div style={{ marginTop: '2rem', color: '#888', fontSize: '0.95rem', textAlign: 'center' }}>
+        <span>Track your daily habits to build consistency and see your progress over time!</span>
+      </div>
+    </section>
+  );
   const [moodNote, setMoodNote] = useState('');
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [isEncrypted, setIsEncrypted] = useState(false);
@@ -153,7 +501,13 @@ const MinimalApp: React.FC = () => {
   };
 
   const handleInstallPWA = () => {
-    alert('PWA installation will be implemented with service worker!');
+    if (deferredPrompt) {
+      deferredPrompt.prompt();
+      deferredPrompt.userChoice.then(() => {
+        setDeferredPrompt(null);
+        setIsInstallable(false);
+      });
+    }
   };
 
   const handleTagToggle = (tag: string) => {
@@ -518,6 +872,29 @@ const MinimalApp: React.FC = () => {
 
   return (
     <div style={styles.app}>
+      {/* Offline Banner */}
+      {showOfflineBanner && (
+        <div style={{
+          background: '#f8d7da',
+          color: '#721c24',
+          padding: '0.75rem 1.5rem',
+          textAlign: 'center',
+          fontWeight: 600,
+          borderBottom: '2px solid #f5c6cb',
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          zIndex: 2000
+        }}>
+          <span>You are offline. Some features may be unavailable.</span>
+          <button
+            onClick={() => setShowOfflineBanner(false)}
+            style={{ marginLeft: 16, background: 'none', border: 'none', color: '#721c24', fontWeight: 700, cursor: 'pointer', fontSize: '1.1rem' }}
+            aria-label="Dismiss offline banner"
+          >✕</button>
+        </div>
+      )}
       <header style={styles.header}>
         <h1 style={styles.title}>🧠 MindWell</h1>
         <p style={styles.subtitle}>Privacy-first mental wellness tracking</p>
@@ -529,31 +906,108 @@ const MinimalApp: React.FC = () => {
         {isEncrypted && <span style={{color: '#27ae60', fontSize: '0.9rem'}}>🔒 Encrypted</span>}
       </header>
 
-      {/* Navigation */}
-      <nav style={styles.nav}>
-        {[
-          {id: 'mood', label: '😊 Mood', icon: '😊'},
-          {id: 'dashboard', label: '📊 Dashboard', icon: '📊'},
-          {id: 'interventions', label: '🧘 Interventions', icon: '🧘'},
-          {id: 'vr', label: '🥽 VR Scenes', icon: '🥽'},
-          {id: 'chat', label: '💬 Chat', icon: '💬'},
-          {id: 'privacy', label: '🔒 Privacy', icon: '🔒'}
-        ].map(nav => (
-          <button
-            key={nav.id}
-            onClick={() => setCurrentView(nav.id as any)}
-            style={{
-              ...styles.navBtn,
-              ...(currentView === nav.id ? styles.navBtnActive : {})
-            }}
-          >
-            {nav.label}
-          </button>
-        ))}
+      {/* Navigation - Responsive */}
+      <nav aria-label="Main navigation">
+        <div className="main-nav-desktop" style={styles.nav}>
+          {[
+            {id: 'dashboard', label: 'Home', icon: '🏠'},
+            {id: 'checkin', label: 'Check-In', icon: '📝'},
+            {id: 'mood', label: 'Mood', icon: '😊'},
+            {id: 'habits', label: 'Habits', icon: '🗓️'},
+            {id: 'journal', label: 'Journal', icon: '📓'},
+            {id: 'mindfulness', label: 'Mindfulness', icon: '🧘'},
+            {id: 'progress', label: 'Progress', icon: '📈'},
+            {id: 'resources', label: 'Resources', icon: '📚'},
+            {id: 'safety', label: 'Safety', icon: '🛟'},
+            {id: 'interventions', label: 'Tools', icon: '🧘'},
+            {id: 'chat', label: 'Chat', icon: '💬'},
+            {id: 'privacy', label: 'Privacy', icon: '🔒'}
+          ].map(nav => (
+            <button
+              key={nav.id}
+              aria-label={nav.label}
+              onClick={() => setCurrentView(nav.id as any)}
+              style={{
+                ...styles.navBtn,
+                ...(currentView === nav.id ? styles.navBtnActive : {})
+              }}
+            >
+              <span aria-hidden="true">{nav.icon}</span> {nav.label}
+            </button>
+          ))}
+        </div>
+        <div className="main-nav-mobile" style={{ position: 'fixed', bottom: 0, left: 0, right: 0, background: 'rgba(255,255,255,0.95)', display: 'flex', justifyContent: 'space-around', padding: '0.5rem 0', boxShadow: '0 -2px 8px rgba(0,0,0,0.05)', zIndex: 1000, borderTopLeftRadius: '16px', borderTopRightRadius: '16px' }}>
+          {[
+            {id: 'dashboard', label: 'Home', icon: '🏠'},
+            {id: 'checkin', label: 'Check-In', icon: '📝'},
+            {id: 'mood', label: 'Mood', icon: '😊'},
+            {id: 'habits', label: 'Habits', icon: '🗓️'},
+            {id: 'progress', label: 'Progress', icon: '📈'},
+            {id: 'resources', label: 'Resources', icon: '📚'},
+            {id: 'interventions', label: 'Tools', icon: '🧘'},
+            {id: 'chat', label: 'Chat', icon: '💬'},
+            {id: 'privacy', label: 'Privacy', icon: '🔒'}
+          ].map(nav => (
+            <button
+              key={nav.id}
+              aria-label={nav.label}
+              onClick={() => setCurrentView(nav.id as any)}
+              style={{
+                background: 'none',
+                border: 'none',
+                color: currentView === nav.id ? '#667eea' : '#2c3e50',
+                fontSize: '1.5rem',
+                flex: 1,
+                padding: '0.5rem 0',
+                outline: 'none',
+                borderRadius: '12px',
+                transition: 'background 0.2s',
+                ...(currentView === nav.id ? { background: '#e3f0ff' } : {})
+              }}
+            >
+              <span aria-hidden="true">{nav.icon}</span>
+            </button>
+          ))}
+        </div>
       </nav>
 
       <main style={styles.main}>
         {/* Mood Tracking View */}
+        {currentView === 'checkin' && (
+          <CheckInFlow
+            moodOptions={moodOptions}
+            availableTags={availableTags}
+            onComplete={async (entry) => {
+              // Save check-in as a mood entry
+              try {
+                const response = await fetch('/api/mood', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    mood: entry.mood,
+                    notes: entry.note,
+                    activities: entry.tags
+                  })
+                });
+                const data = await response.json();
+                if (data.success && data.mood) {
+                  const moodsRes = await fetch('/api/mood');
+                  const moodsData = await moodsRes.json();
+                  setMoodHistory(moodsData.moods || []);
+                  const scores = (moodsData.moods || []).map((entry: any) => entry.mood);
+                  if (scores.length > 0) {
+                    const baselineData = calculateBaseline(scores);
+                    setBaseline(baselineData);
+                  }
+                }
+                setCurrentView('dashboard');
+              } catch (error) {
+                alert('Failed to save check-in. Please try again.');
+              }
+            }}
+          />
+        )}
+
         {currentView === 'mood' && (
           <>
             <section style={styles.section}>
@@ -587,96 +1041,71 @@ const MinimalApp: React.FC = () => {
               {/* Tags */}
               <h3>Tags (optional):</h3>
               <div style={styles.tagGrid}>
-                {availableTags.map(tag => (
-                  <div
-                    key={tag}
-                    onClick={() => handleTagToggle(tag)}
-                    style={{
-                      ...styles.tag,
-                      ...(selectedTags.includes(tag) ? styles.tagSelected : {})
-                    }}
-                  >
-                    {tag}
+                <nav aria-label="Main navigation">
+                  <div className="main-nav-desktop" style={styles.nav}>
+                    {[
+                      {id: 'dashboard', label: 'Home', icon: '🏠'},
+                      {id: 'checkin', label: 'Check-In', icon: '📝'},
+                      {id: 'mood', label: 'Mood', icon: '😊'},
+                      {id: 'habits', label: 'Habits', icon: '🗓️'},
+                      {id: 'journal', label: 'Journal', icon: '📓'},
+                      {id: 'mindfulness', label: 'Mindfulness', icon: '🧘'},
+                      {id: 'progress', label: 'Progress', icon: '📈'},
+                      {id: 'resources', label: 'Resources', icon: '📚'},
+                      {id: 'safety', label: 'Safety', icon: '🛟'},
+                      {id: 'interventions', label: 'Tools', icon: '🧘'},
+                      {id: 'chat', label: 'Chat', icon: '💬'},
+                      {id: 'privacy', label: 'Privacy', icon: '🔒'}
+                    ].map(nav => (
+                      <button
+                        key={nav.id}
+                        aria-label={nav.label}
+                        onClick={() => setCurrentView(nav.id as any)}
+                        style={{
+                          ...styles.navBtn,
+                          ...(currentView === nav.id ? styles.navBtnActive : {})
+                        }}
+                      >
+                        <span aria-hidden="true">{nav.icon}</span> {nav.label}
+                      </button>
+                    ))}
                   </div>
-                ))}
-              </div>
-              
-              {currentMood && (
-                <div style={styles.feedback}>
-                  <p>✅ Mood recorded: {moodOptions.find(m => m.value === currentMood)?.label}</p>
-                  <p>🔒 Stored securely on your device</p>
-                  {baseline && baseline.changePointDetected && (
-                    <p>📊 Significant mood change detected - consider trying an intervention</p>
-                  )}
-                </div>
-              )}
-            </section>
-
-            {moodHistory.length > 0 && (
-              <section style={styles.section}>
-                <h2 style={styles.sectionTitle}>Recent Mood History</h2>
-                {moodHistory.slice(0, 5).map((entry, index) => (
-                  <div key={index} style={styles.historyItem}>
-                    <div>
-                      <span>
-                        {moodOptions.find(m => m.value === entry.mood)?.emoji} {' '}
-                        {moodOptions.find(m => m.value === entry.mood)?.label}
-                      </span>
-                      {entry.note && <p style={{margin: '0.25rem 0', fontSize: '0.9rem', color: '#666'}}>{entry.note}</p>}
-                      {entry.tags && entry.tags.length > 0 && (
-                        <div style={{fontSize: '0.8rem', color: '#888'}}>
-                          Tags: {entry.tags.join(', ')}
-                        </div>
-                      )}
-                    </div>
-                    <span>{new Date(entry.timestamp).toLocaleDateString()}</span>
+                  <div className="main-nav-mobile" style={{ position: 'fixed', bottom: 0, left: 0, right: 0, background: 'rgba(255,255,255,0.95)', display: 'flex', justifyContent: 'space-around', padding: '0.5rem 0', boxShadow: '0 -2px 8px rgba(0,0,0,0.05)', zIndex: 1000, borderTopLeftRadius: '16px', borderTopRightRadius: '16px' }}>
+                    {[
+                      {id: 'dashboard', label: 'Home', icon: '🏠'},
+                      {id: 'checkin', label: 'Check-In', icon: '📝'},
+                      {id: 'mood', label: 'Mood', icon: '😊'},
+                      {id: 'habits', label: 'Habits', icon: '🗓️'},
+                      {id: 'progress', label: 'Progress', icon: '📈'},
+                      {id: 'resources', label: 'Resources', icon: '📚'},
+                      {id: 'interventions', label: 'Tools', icon: '🧘'},
+                      {id: 'chat', label: 'Chat', icon: '💬'},
+                      {id: 'privacy', label: 'Privacy', icon: '🔒'}
+                    ].map(nav => (
+                      <button
+                        key={nav.id}
+                        aria-label={nav.label}
+                        onClick={() => setCurrentView(nav.id as any)}
+                        style={{
+                          background: 'none',
+                          border: 'none',
+                          color: currentView === nav.id ? '#667eea' : '#2c3e50',
+                          fontSize: '1.5rem',
+                          flex: 1,
+                          padding: '0.5rem 0',
+                          borderRadius: '12px',
+                          transition: 'background 0.2s',
+                          ...(currentView === nav.id ? { background: '#e3f0ff' } : {})
+                        }}
+                      >
+                        <span aria-hidden="true">{nav.icon}</span>
+                      </button>
+                    ))}
                   </div>
-                ))}
-              </section>
-            )}
-          </>
-        )}
-
-        {/* Dashboard View */}
-        {currentView === 'dashboard' && (
-          <section style={styles.section}>
-            <h2 style={styles.sectionTitle}>📊 Mental Wellness Dashboard</h2>
-            {baseline ? (
-              <div>
-                <div style={{display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem', marginBottom: '2rem'}}>
-                  <div style={{padding: '1rem', background: '#f8f9fa', borderRadius: '10px', textAlign: 'center'}}>
-                    <h3>Current Baseline</h3>
-                    <p style={{fontSize: '2rem', margin: '0.5rem 0'}}>{baseline.rollingMean.toFixed(1)}</p>
-                    <p>Average Mood</p>
-                  </div>
-                  <div style={{padding: '1rem', background: '#f8f9fa', borderRadius: '10px', textAlign: 'center'}}>
-                    <h3>Z-Score</h3>
-                    <p style={{fontSize: '2rem', margin: '0.5rem 0', color: baseline.zScore > 0 ? '#27ae60' : '#e74c3c'}}>
-                      {baseline.zScore.toFixed(2)}
-                    </p>
-                    <p>{baseline.zScore > 1.5 ? 'Above Normal' : baseline.zScore < -1.5 ? 'Below Normal' : 'Normal Range'}</p>
-                  </div>
-                  <div style={{padding: '1rem', background: '#f8f9fa', borderRadius: '10px', textAlign: 'center'}}>
-                    <h3>Confidence</h3>
-                    <p style={{fontSize: '2rem', margin: '0.5rem 0'}}>{(baseline.confidence * 100).toFixed(0)}%</p>
-                    <p>Data Reliability</p>
-                  </div>
-                </div>
-                {baseline.changePointDetected && (
-                  <div style={{...styles.feedback, background: '#fff3cd', borderLeft: '4px solid #ffc107'}}>
-                    <p>⚠️ Significant mood change detected. Consider tracking more frequently or trying an intervention.</p>
-                  </div>
-                )}
-              </div>
-            ) : (
-              <p>Track your mood for a few days to see your baseline analysis.</p>
-            )}
-            
-            <h3>Recent Trends</h3>
-            <div style={{height: '200px', background: '#f8f9fa', borderRadius: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center'}}>
-              <p>📈 Chart visualization will be implemented with Chart.js</p>
+                </nav>
             </div>
           </section>
+          </>
         )}
 
         {/* Interventions View */}
@@ -787,6 +1216,9 @@ const MinimalApp: React.FC = () => {
             )}
           </section>
         )}
+
+        {/* Habits View */}
+        {currentView === 'habits' && <HabitTracker />}
 
         {/* Chat View */}
         {currentView === 'chat' && (
@@ -924,80 +1356,9 @@ const MinimalApp: React.FC = () => {
 
         {/* Privacy View */}
         {currentView === 'privacy' && (
-          <section style={styles.section}>
-            <h2 style={styles.sectionTitle}>🔒 Privacy & Data Control</h2>
-            <div style={{marginBottom: '2rem'}}>
-              <h3>Encryption Status</h3>
-              <p>
-                {isEncrypted ? (
-                  <span style={{color: '#27ae60'}}>✅ Your data is encrypted with AES-256-GCM</span>
-                ) : (
-                  <span style={{color: '#e74c3c'}}>❌ Encryption not enabled</span>
-                )}
-              </p>
-              {!isEncrypted && (
-                <button 
-                  onClick={() => setShowPasswordSetup(true)} 
-                  style={styles.btn}
-                >
-                  Enable Encryption
-                </button>
-              )}
-            </div>
-            
-            <div style={{marginBottom: '2rem'}}>
-              <h3>Data Storage</h3>
-              <p>✅ All data stored locally on your device</p>
-              <p>✅ No data sent to external servers</p>
-              <p>✅ You have complete control over your information</p>
-            </div>
-
-            <div style={{marginBottom: '2rem'}}>
-              <h3>Data Management</h3>
-              <div style={{display: 'flex', gap: '1rem', flexWrap: 'wrap'}}>
-                <button 
-                  onClick={() => {
-                    const data = JSON.stringify(moodHistory, null, 2);
-                    const blob = new Blob([data], {type: 'application/json'});
-                    const url = URL.createObjectURL(blob);
-                    const a = document.createElement('a');
-                    a.href = url;
-                    a.download = 'mindwell-data-export.json';
-                    a.click();
-                  }}
-                  style={styles.btn}
-                >
-                  📥 Export Data
-                </button>
-                <button 
-                  onClick={() => {
-                    const confirmDelete = window.confirm('Are you sure you want to delete all your data? This cannot be undone.');
-                    if (confirmDelete) {
-                      localStorage.clear();
-                      setMoodHistory([]);
-                      setBaseline(null);
-                      alert('All data has been securely deleted.');
-                    }
-                  }}
-                  style={{...styles.btn, background: '#e74c3c'}}
-                >
-                  🗑️ Delete All Data
-                </button>
-              </div>
-            </div>
-
-            <div>
-              <h3>Privacy Features</h3>
-              <ul>
-                <li>🔒 End-to-end encryption with WebCrypto API</li>
-                <li>🏠 Local-only data storage (IndexedDB)</li>
-                <li>🚫 No tracking or analytics</li>
-                <li>🔐 PBKDF2 key derivation with 100,000 iterations</li>
-                <li>📱 Works completely offline</li>
-                <li>🗑️ Secure data deletion</li>
-              </ul>
-            </div>
-          </section>
+          <Suspense fallback={<div style={{textAlign:'center',margin:'2rem'}}>Loading privacy settings...</div>}>
+            <PrivacySettings userId={"default-user"} />
+          </Suspense>
         )}
       </main>
 

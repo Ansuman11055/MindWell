@@ -1,5 +1,79 @@
 /* App-specific styles for Mental Wellness PWA */
 
+html, body {
+  margin: 0;
+  padding: 0;
+  font-family: 'Inter', 'Nunito', 'Poppins', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
+  background: linear-gradient(135deg, #e3f0ff 0%, #f8f9fa 100%);
+  min-height: 100vh;
+  color: #2c3e50;
+  font-size: 16px;
+  line-height: 1.7;
+}
+
+#root {
+  min-height: 100vh;
+}
+
+.card {
+  background: rgba(255,255,255,0.95);
+  border-radius: 16px;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.08);
+  padding: 2rem;
+  margin: 1rem 0;
+  color: #2c3e50;
+}
+
+button, input, textarea {
+  border-radius: 12px;
+  border: none;
+  font-size: 1rem;
+  font-family: inherit;
+  outline: none;
+  transition: box-shadow 0.2s;
+}
+
+button:focus, input:focus, textarea:focus {
+  box-shadow: 0 0 0 2px #b4aee8;
+}
+
+/* Global Styles */
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  font-family: 'Inter', 'Nunito', 'Poppins', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
+  background: linear-gradient(135deg, #e3f0ff 0%, #f8f9fa 100%);
+  color: #2c3e50;
+  line-height: 1.6;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  margin: 0;
+  padding: 0;
+  color: #2c3e50;
+}
+
+p {
+  margin: 0;
+  padding: 0;
+  color: #34495e;
+}
+
+a {
+  color: #2980b9;
+  text-decoration: none;
+  transition: color 0.3s;
+}
+
+a:hover {
+  color: #1a5276;
+}
+
+/* App Styles */
 .app {
   min-height: 100vh;
   display: flex;
@@ -573,6 +647,14 @@
     font-size: 10px;
     opacity: 0.5;
   }
+}
+
+/* Responsive navigation */
+.main-nav-desktop { display: none; }
+@media (min-width: 768px) {
+  .main-nav-desktop { display: flex; }
+  .main-nav-mobile { display: none; }
+}
 
 /* Focus and accessibility improvements */
 .mood-button:focus-visible,
