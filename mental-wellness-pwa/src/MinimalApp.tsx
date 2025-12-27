@@ -15,8 +15,6 @@ const Safety = React.lazy(() => import('./components/Safety'));
 const VRExperience = React.lazy(() => import('./components/VRExperience'));
 const PrivacySettings = React.lazy(() => import('./components/PrivacySettings'));
 
-// ...existing code...
-
 interface MoodEntry {
   mood: number;
   timestamp: string;
@@ -959,7 +957,6 @@ const MinimalApp: React.FC = () => {
                 fontSize: '1.5rem',
                 flex: 1,
                 padding: '0.5rem 0',
-                outline: 'none',
                 borderRadius: '12px',
                 transition: 'background 0.2s',
                 ...(currentView === nav.id ? { background: '#e3f0ff' } : {})
@@ -972,145 +969,148 @@ const MinimalApp: React.FC = () => {
       </nav>
 
       <main style={styles.main}>
-        {/* Mood Tracking View */}
-        {currentView === 'checkin' && (
-          <CheckInFlow
-            moodOptions={moodOptions}
-            availableTags={availableTags}
-            onComplete={async (entry) => {
-              // Save check-in as a mood entry
-              try {
-                const response = await fetch('/api/mood', {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({
-                    mood: entry.mood,
-                    notes: entry.note,
-                    activities: entry.tags
-                  })
-                });
-                const data = await response.json();
-                if (data.success && data.mood) {
-                  const moodsRes = await fetch('/api/mood');
-                  const moodsData = await moodsRes.json();
-                  setMoodHistory(moodsData.moods || []);
-                  const scores = (moodsData.moods || []).map((entry: any) => entry.mood);
-                  if (scores.length > 0) {
-                    const baselineData = calculateBaseline(scores);
-                    setBaseline(baselineData);
-                  }
-                }
-                setCurrentView('dashboard');
-              } catch (error) {
-                alert('Failed to save check-in. Please try again.');
-              }
-            }}
-          />
+        {currentView === 'dashboard' && (
+          <Suspense fallback={<div style={{textAlign:'center',margin:'2rem'}}>Loading dashboard...</div>}>
+            <Dashboard />
+          </Suspense>
         )}
-
+        {currentView === 'checkin' && (
+          <Suspense fallback={<div style={{textAlign:'center',margin:'2rem'}}>Loading check-in...</div>}>
+            <CheckInFlow
+              moodOptions={moodOptions}
+              availableTags={availableTags}
+              onComplete={async (entry) => {
+                // Save check-in as a mood entry
+                try {
+                  const response = await fetch('/api/mood', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      mood: entry.mood,
+                      notes: entry.note,
+                      activities: entry.tags
+                    })
+                  });
+                  const data = await response.json();
+                  if (data.success && data.mood) {
+                    const moodsRes = await fetch('/api/mood');
+                    const moodsData = await moodsRes.json();
+                    setMoodHistory(moodsData.moods || []);
+                    const scores = (moodsData.moods || []).map((entry: any) => entry.mood);
+                    if (scores.length > 0) {
+                      const baselineData = calculateBaseline(scores);
+                      setBaseline(baselineData);
+                    }
+                  }
+                  setCurrentView('dashboard');
+                } catch (error) {
+                  alert('Failed to save check-in. Please try again.');
+                }
+              }}
+            />
+          </Suspense>
+        )}
         {currentView === 'mood' && (
-          <>
-            <section style={styles.section}>
-              <h2 style={styles.sectionTitle}>How are you feeling right now?</h2>
-              <div style={styles.moodOptions}>
-                {moodOptions.map((option) => (
-                  <button
-                    key={option.value}
-                    onClick={() => handleMoodSelect(option.value)}
-                    style={{
-                      ...styles.moodBtn,
-                      borderColor: option.color,
-                      ...(currentMood === option.value ? styles.moodBtnSelected : {})
-                    }}
-                    aria-label={`Select mood: ${option.label}`}
-                  >
-                    <span style={styles.moodEmoji}>{option.emoji}</span>
-                    <span style={styles.moodLabel}>{option.label}</span>
-                  </button>
-                ))}
-              </div>
+          <section style={styles.section}>
+            {/* Mood View */}
+            <h2 style={styles.sectionTitle}>How are you feeling right now?</h2>
+            <div style={styles.moodOptions}>
+              {moodOptions.map((option) => (
+                <button
+                  key={option.value}
+                  onClick={() => handleMoodSelect(option.value)}
+                  style={{
+                    ...styles.moodBtn,
+                    borderColor: option.color,
+                    ...(currentMood === option.value ? styles.moodBtnSelected : {})
+                  }}
+                  aria-label={`Select mood: ${option.label}`}
+                >
+                  <span style={styles.moodEmoji}>{option.emoji}</span>
+                  <span style={styles.moodLabel}>{option.label}</span>
+                </button>
+              ))}
+            </div>
 
-              {/* Mood Note */}
-              <textarea
-                placeholder="Add a note about your mood (optional)..."
-                value={moodNote}
-                onChange={(e) => setMoodNote(e.target.value)}
-                style={styles.textarea}
-              />
+            {/* Mood Note */}
+            <textarea
+              placeholder="Add a note about your mood (optional)..."
+              value={moodNote}
+              onChange={(e) => setMoodNote(e.target.value)}
+              style={styles.textarea}
+            />
 
-              {/* Tags */}
-              <h3>Tags (optional):</h3>
-              <div style={styles.tagGrid}>
-                <nav aria-label="Main navigation">
-                  <div className="main-nav-desktop" style={styles.nav}>
-                    {[
-                      {id: 'dashboard', label: 'Home', icon: '🏠'},
-                      {id: 'checkin', label: 'Check-In', icon: '📝'},
-                      {id: 'mood', label: 'Mood', icon: '😊'},
-                      {id: 'habits', label: 'Habits', icon: '🗓️'},
-                      {id: 'journal', label: 'Journal', icon: '📓'},
-                      {id: 'mindfulness', label: 'Mindfulness', icon: '🧘'},
-                      {id: 'progress', label: 'Progress', icon: '📈'},
-                      {id: 'resources', label: 'Resources', icon: '📚'},
-                      {id: 'safety', label: 'Safety', icon: '🛟'},
-                      {id: 'interventions', label: 'Tools', icon: '🧘'},
-                      {id: 'chat', label: 'Chat', icon: '💬'},
-                      {id: 'privacy', label: 'Privacy', icon: '🔒'}
-                    ].map(nav => (
-                      <button
-                        key={nav.id}
-                        aria-label={nav.label}
-                        onClick={() => setCurrentView(nav.id as any)}
-                        style={{
-                          ...styles.navBtn,
-                          ...(currentView === nav.id ? styles.navBtnActive : {})
-                        }}
-                      >
-                        <span aria-hidden="true">{nav.icon}</span> {nav.label}
-                      </button>
-                    ))}
-                  </div>
-                  <div className="main-nav-mobile" style={{ position: 'fixed', bottom: 0, left: 0, right: 0, background: 'rgba(255,255,255,0.95)', display: 'flex', justifyContent: 'space-around', padding: '0.5rem 0', boxShadow: '0 -2px 8px rgba(0,0,0,0.05)', zIndex: 1000, borderTopLeftRadius: '16px', borderTopRightRadius: '16px' }}>
-                    {[
-                      {id: 'dashboard', label: 'Home', icon: '🏠'},
-                      {id: 'checkin', label: 'Check-In', icon: '📝'},
-                      {id: 'mood', label: 'Mood', icon: '😊'},
-                      {id: 'habits', label: 'Habits', icon: '🗓️'},
-                      {id: 'progress', label: 'Progress', icon: '📈'},
-                      {id: 'resources', label: 'Resources', icon: '📚'},
-                      {id: 'interventions', label: 'Tools', icon: '🧘'},
-                      {id: 'chat', label: 'Chat', icon: '💬'},
-                      {id: 'privacy', label: 'Privacy', icon: '🔒'}
-                    ].map(nav => (
-                      <button
-                        key={nav.id}
-                        aria-label={nav.label}
-                        onClick={() => setCurrentView(nav.id as any)}
-                        style={{
-                          background: 'none',
-                          border: 'none',
-                          color: currentView === nav.id ? '#667eea' : '#2c3e50',
-                          fontSize: '1.5rem',
-                          flex: 1,
-                          padding: '0.5rem 0',
-                          borderRadius: '12px',
-                          transition: 'background 0.2s',
-                          ...(currentView === nav.id ? { background: '#e3f0ff' } : {})
-                        }}
-                      >
-                        <span aria-hidden="true">{nav.icon}</span>
-                      </button>
-                    ))}
-                  </div>
-                </nav>
+            {/* Tags */}
+            <h3>Tags (optional):</h3>
+            <div style={styles.tagGrid}>
+              <nav aria-label="Main navigation">
+                <div className="main-nav-desktop" style={styles.nav}>
+                  {[
+                    {id: 'dashboard', label: 'Home', icon: '🏠'},
+                    {id: 'checkin', label: 'Check-In', icon: '📝'},
+                    {id: 'mood', label: 'Mood', icon: '😊'},
+                    {id: 'habits', label: 'Habits', icon: '🗓️'},
+                    {id: 'journal', label: 'Journal', icon: '📓'},
+                    {id: 'mindfulness', label: 'Mindfulness', icon: '🧘'},
+                    {id: 'progress', label: 'Progress', icon: '📈'},
+                    {id: 'resources', label: 'Resources', icon: '📚'},
+                    {id: 'safety', label: 'Safety', icon: '🛟'},
+                    {id: 'interventions', label: 'Tools', icon: '🧘'},
+                    {id: 'chat', label: 'Chat', icon: '💬'},
+                    {id: 'privacy', label: 'Privacy', icon: '🔒'}
+                  ].map(nav => (
+                    <button
+                      key={nav.id}
+                      aria-label={nav.label}
+                      onClick={() => setCurrentView(nav.id as any)}
+                      style={{
+                        ...styles.navBtn,
+                        ...(currentView === nav.id ? styles.navBtnActive : {})
+                      }}
+                    >
+                      <span aria-hidden="true">{nav.icon}</span> {nav.label}
+                    </button>
+                  ))}
+                </div>
+                <div className="main-nav-mobile" style={{ position: 'fixed', bottom: 0, left: 0, right: 0, background: 'rgba(255,255,255,0.95)', display: 'flex', justifyContent: 'space-around', padding: '0.5rem 0', boxShadow: '0 -2px 8px rgba(0,0,0,0.05)', zIndex: 1000, borderTopLeftRadius: '16px', borderTopRightRadius: '16px' }}>
+                  {[
+                    {id: 'dashboard', label: 'Home', icon: '🏠'},
+                    {id: 'checkin', label: 'Check-In', icon: '📝'},
+                    {id: 'mood', label: 'Mood', icon: '😊'},
+                    {id: 'habits', label: 'Habits', icon: '🗓️'},
+                    {id: 'progress', label: 'Progress', icon: '📈'},
+                    {id: 'resources', label: 'Resources', icon: '📚'},
+                    {id: 'interventions', label: 'Tools', icon: '🧘'},
+                    {id: 'chat', label: 'Chat', icon: '💬'},
+                    {id: 'privacy', label: 'Privacy', icon: '🔒'}
+                  ].map(nav => (
+                    <button
+                      key={nav.id}
+                      aria-label={nav.label}
+                      onClick={() => setCurrentView(nav.id as any)}
+                      style={{
+                        background: 'none',
+                        border: 'none',
+                        color: currentView === nav.id ? '#667eea' : '#2c3e50',
+                        fontSize: '1.5rem',
+                        flex: 1,
+                        padding: '0.5rem 0',
+                        borderRadius: '12px',
+                        transition: 'background 0.2s',
+                        ...(currentView === nav.id ? { background: '#e3f0ff' } : {})
+                      }}
+                    >
+                      <span aria-hidden="true">{nav.icon}</span>
+                    </button>
+                  ))}
+                </div>
+              </nav>
             </div>
           </section>
-          </>
         )}
 
-        {/* Interventions View */}
-        {currentView === 'interventions' && (
-          <section style={styles.section}>
+          {currentView === 'interventions' && (
+            <section style={styles.section}>
             <h2 style={styles.sectionTitle}>🧘 Micro-Interventions</h2>
             {currentIntervention ? (
               <div>
@@ -1158,70 +1158,97 @@ const MinimalApp: React.FC = () => {
           </section>
         )}
 
-        {/* VR Scenes View */}
-        {currentView === 'vr' && (
-          <section style={styles.section}>
-            <h2 style={styles.sectionTitle}>🥽 VR Calming Scenes</h2>
-            {vrScene ? (
-              <div>
-                <div style={styles.vrScene}>
-                  <div style={{
-                    width: '100%', 
-                    height: '100%', 
-                    background: vrScene === 'forest' ? 'linear-gradient(to bottom, #87CEEB, #228B22)' :
-                                vrScene === 'ocean' ? 'linear-gradient(to bottom, #87CEFA, #4682B4)' :
-                                'linear-gradient(to bottom, #E0E6FF, #8A2BE2)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    color: 'white',
-                    fontSize: '1.5rem'
-                  }}>
-                    {vrScene === 'forest' && '🌲🌳🌲 Peaceful Forest 🌲🌳🌲'}
-                    {vrScene === 'ocean' && '🌊🐚🌊 Calming Ocean 🌊🐚🌊'}
-                    {vrScene === 'mountain' && '🏔️⛰️🏔️ Serene Mountains 🏔️⛰️🏔️'}
+          {currentView === 'vr' && (
+          <Suspense fallback={<div style={{textAlign:'center',margin:'2rem'}}>Loading VR experience...</div>}>
+            <section style={styles.section}>
+              <h2 style={styles.sectionTitle}>🥽 VR Calming Scenes</h2>
+              {vrScene ? (
+                <div>
+                  <div style={styles.vrScene}>
+                    <div style={{
+                      width: '100%', 
+                      height: '100%', 
+                      background: vrScene === 'forest' ? 'linear-gradient(to bottom, #87CEEB, #228B22)' :
+                                  vrScene === 'ocean' ? 'linear-gradient(to bottom, #87CEFA, #4682B4)' :
+                                  'linear-gradient(to bottom, #E0E6FF, #8A2BE2)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      color: 'white',
+                      fontSize: '1.5rem'
+                    }}>
+                      {vrScene === 'forest' && '🌲🌳🌲 Peaceful Forest 🌲🌳🌲'}
+                      {vrScene === 'ocean' && '🌊🐚🌊 Calming Ocean 🌊🐚🌊'}
+                      {vrScene === 'mountain' && '🏔️⛰️🏔️ Serene Mountains 🏔️⛰️🏔️'}
+                    </div>
+                  </div>
+                  <div style={{textAlign: 'center', marginTop: '1rem'}}>
+                    <button 
+                      onClick={() => setVrScene(null)} 
+                      style={styles.btn}
+                    >
+                      Exit VR Scene
+                    </button>
                   </div>
                 </div>
-                <div style={{textAlign: 'center', marginTop: '1rem'}}>
-                  <button 
-                    onClick={() => setVrScene(null)} 
-                    style={styles.btn}
-                  >
-                    Exit VR Scene
-                  </button>
+              ) : (
+                <div>
+                  <p>Immerse yourself in calming virtual environments. Choose a scene:</p>
+                  <div style={{display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '1rem'}}>
+                    {[
+                      {id: 'forest', name: '🌲 Peaceful Forest', desc: 'Gentle swaying trees and forest sounds'},
+                      {id: 'ocean', name: '🌊 Calming Ocean', desc: 'Rhythmic waves and ocean breeze'},
+                      {id: 'mountain', name: '🏔️ Serene Mountains', desc: 'Majestic peaks and mountain air'}
+                    ].map(scene => (
+                      <div key={scene.id} style={{padding: '1.5rem', border: '2px solid #ecf0f1', borderRadius: '15px', textAlign: 'center'}}>
+                        <h3>{scene.name}</h3>
+                        <p>{scene.desc}</p>
+                        <button 
+                          onClick={() => setVrScene(scene.id as any)} 
+                          style={styles.btn}
+                        >
+                          Enter Scene
+                        </button>
+                      </div>
+                    ))}
+                  </div>
                 </div>
-              </div>
-            ) : (
-              <div>
-                <p>Immerse yourself in calming virtual environments. Choose a scene:</p>
-                <div style={{display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '1rem'}}>
-                  {[
-                    {id: 'forest', name: '🌲 Peaceful Forest', desc: 'Gentle swaying trees and forest sounds'},
-                    {id: 'ocean', name: '🌊 Calming Ocean', desc: 'Rhythmic waves and ocean breeze'},
-                    {id: 'mountain', name: '🏔️ Serene Mountains', desc: 'Majestic peaks and mountain air'}
-                  ].map(scene => (
-                    <div key={scene.id} style={{padding: '1.5rem', border: '2px solid #ecf0f1', borderRadius: '15px', textAlign: 'center'}}>
-                      <h3>{scene.name}</h3>
-                      <p>{scene.desc}</p>
-                      <button 
-                        onClick={() => setVrScene(scene.id as any)} 
-                        style={styles.btn}
-                      >
-                        Enter Scene
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-          </section>
+              )}
+            </section>
+          </Suspense>
         )}
 
-        {/* Habits View */}
-        {currentView === 'habits' && <HabitTracker />}
+          {currentView === 'habits' && (
+          <Suspense fallback={<div style={{textAlign:'center',margin:'2rem'}}>Loading habits...</div>}>
+            <HabitTracker />
+          </Suspense>
+        )}
 
-        {/* Chat View */}
-        {currentView === 'chat' && (
+          {currentView === 'journal' && (
+          <Suspense fallback={<div style={{textAlign:'center',margin:'2rem'}}>Loading journal...</div>}>
+            <Journal />
+          </Suspense>
+        )}
+
+          {currentView === 'mindfulness' && (
+          <Suspense fallback={<div style={{textAlign:'center',margin:'2rem'}}>Loading mindfulness tools...</div>}>
+            <MindfulnessTools />
+          </Suspense>
+        )}
+
+          {currentView === 'resources' && (
+          <Suspense fallback={<div style={{textAlign:'center',margin:'2rem'}}>Loading resources...</div>}>
+            <Resources />
+          </Suspense>
+        )}
+
+          {currentView === 'safety' && (
+          <Suspense fallback={<div style={{textAlign:'center',margin:'2rem'}}>Loading safety info...</div>}>
+            <Safety />
+          </Suspense>
+        )}
+
+          {currentView === 'chat' && (
           <section style={styles.section}>
             <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem'}}>
               <h2 style={{...styles.sectionTitle, margin: 0}}>💬 AI Mental Health Support</h2>
@@ -1354,12 +1381,11 @@ const MinimalApp: React.FC = () => {
           </section>
         )}
 
-        {/* Privacy View */}
-        {currentView === 'privacy' && (
-          <Suspense fallback={<div style={{textAlign:'center',margin:'2rem'}}>Loading privacy settings...</div>}>
-            <PrivacySettings userId={"default-user"} />
-          </Suspense>
-        )}
+          {currentView === 'privacy' && (
+            <Suspense fallback={<div style={{textAlign:'center',margin:'2rem'}}>Loading privacy settings...</div>}>
+              <PrivacySettings userId={"default-user"} />
+            </Suspense>
+          )}
       </main>
 
       <footer style={{ textAlign: 'center', padding: '2rem', color: 'white' }}>

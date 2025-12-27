@@ -68,47 +68,38 @@ self.addEventListener('fetch', (event) => {
   }
 
   event.respondWith(
-    caches.match(event.request)
-      .then((cachedResponse) => {
-        // Return cached version if available
-        if (cachedResponse) {
-          return cachedResponse;
+    (async () => {
+      // Always serve index.html for navigation requests (SPA routing)
+      if (event.request.mode === 'navigate') {
+        try {
+          const networkResponse = await fetch('/index.html');
+          return networkResponse;
+        } catch (e) {
+          // If offline, serve cached offline.html if available
+          const cache = await caches.open(OFFLINE_CACHE);
+          const offlineResponse = await cache.match('/offline.html');
+          return offlineResponse || new Response('Offline', { status: 503, statusText: 'Service Unavailable' });
         }
-
-        // Try to fetch from network
-        return fetch(event.request)
-          .then((response) => {
-            // Don't cache non-successful responses
-            if (!response || response.status !== 200 || response.type !== 'basic') {
-              return response;
-            }
-
-            // Clone the response for caching
-            const responseToCache = response.clone();
-
-            caches.open(CACHE_NAME)
-              .then((cache) => {
-                // Cache static assets and API responses
-                if (shouldCache(event.request.url)) {
-                  cache.put(event.request, responseToCache);
-                }
-              });
-
-            return response;
-          })
-          .catch(() => {
-            // Network failed, try to serve offline page for navigation requests
-            if (event.request.mode === 'navigate') {
-              return caches.match(OFFLINE_URL);
-            }
-            
-            // For other requests, return a generic offline response
-            return new Response('Offline', {
-              status: 503,
-              statusText: 'Service Unavailable'
-            });
-          });
-      })
+      }
+      // For all other requests, use cache-first strategy
+      const cachedResponse = await caches.match(event.request);
+      if (cachedResponse) {
+        return cachedResponse;
+      }
+      try {
+        const networkResponse = await fetch(event.request);
+        if (networkResponse && networkResponse.status === 200 && networkResponse.type === 'basic') {
+          const responseToCache = networkResponse.clone();
+          const cache = await caches.open(CACHE_NAME);
+          if (shouldCache(event.request.url)) {
+            cache.put(event.request, responseToCache);
+          }
+        }
+        return networkResponse;
+      } catch (e) {
+        return new Response('Offline', { status: 503, statusText: 'Service Unavailable' });
+      }
+    })()
   );
 });
 
