@@ -1,15 +1,7 @@
 {
   "version": 2,
   "name": "mindwell-pwa",
-  "builds": [
-    {
-      "src": "package.json",
-      "use": "@vercel/static-build",
-      "config": {
-        "distDir": "build"
-      }
-    }
-  ],
+  // ...builds property removed to resolve Vercel conflict
   "routes": [
     {
       "src": "/static/(.*)",
